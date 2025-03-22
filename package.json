@@ -1,0 +1,33 @@
+{
+  "name": "mcp-notion",
+  "version": "1.0.0",
+  "description": "前海读书会Notion自动化工具，用于生成和管理读书会邀请函",
+  "main": "src/notion-mcp-server.js",
+  "scripts": {
+    "start": "node src/notion-mcp-server.js",
+    "test": "node test-notion-connection.js",
+    "generate": "node -e \"const InvitationGenerator = require('./src/invitation-generator'); const generator = new InvitationGenerator(); console.log(generator.generateText(require('./example.json')));\"",
+    "fetch-schedule": "node scripts/fetch-book-schedule.js",
+    "check-schedule": "node scripts/check-schedule-diff.js",
+    "update-schedule": "node scripts/update-local-schedule.js",
+    "invitation": "node scripts/generate-invitation.js"
+  },
+  "keywords": [
+    "notion",
+    "websocket",
+    "automation",
+    "invitation",
+    "reading-club"
+  ],
+  "author": "前海读书会",
+  "license": "ISC",
+  "dependencies": {
+    "@notionhq/client": "^2.3.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.5",
+    "ws": "^8.18.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

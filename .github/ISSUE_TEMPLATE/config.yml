@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 前海读书会自动化工具问题讨论
+    url: https://github.com/your-username/MCP-Notion/discussions
+    about: 有关于使用与配置的一般性问题，请在此处讨论
+  - name: 文档反馈
+    url: https://github.com/your-username/MCP-Notion/discussions/categories/文档
+    about: 如有文档相关的问题或建议，请在此处反馈 

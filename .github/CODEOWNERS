@@ -1,0 +1,20 @@
+# 这个文件定义了项目的代码所有者，用于自动分配审核者
+# 格式: 文件路径 @用户名或团队名
+
+# 默认所有者，适用于未指定所有者的所有文件
+* @your-username
+
+# 前端代码所有者
+/src/invitation-generator.js @your-username
+
+# 后端代码所有者
+/src/notion-mcp-server.js @your-username
+
+# 配置文件所有者
+/config/ @your-username
+
+# 文档所有者
+*.md @your-username
+
+# 工作流和CI配置
+/.github/ @your-username 

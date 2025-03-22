@@ -1,0 +1,46 @@
+# 依赖目录
+node_modules/
+
+# 环境变量文件（包含敏感信息）
+.env
+.env.local
+.env.*.local
+
+# IDE配置
+.cursor/
+.vscode/
+.idea/
+*.sublime-*
+
+# 日志文件
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 临时文件
+tmp/
+temp/
+
+# 构建输出
+dist/
+build/
+output/
+
+# OS文件
+.DS_Store
+Thumbs.db
+.directory
+Desktop.ini
+
+# 生成的配置
+config/book-schedule.json
+
+# 调试文件
+coverage/
+.nyc_output/
+
+# 锁定文件（根据项目需求可能需要注释掉）
+# package-lock.json
+# yarn.lock 

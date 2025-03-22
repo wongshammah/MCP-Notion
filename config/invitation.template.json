@@ -1,0 +1,46 @@
+{
+  "title": "前海读书会（第{period}期）邀请函",
+  "header": "{date}（周四）晚 19:00-21:30，前海读书会与您相约——",
+  "bookTitle": "《{bookName}》",
+  "bookIntro": "{bookIntro}",
+  "leader": {
+    "title": "领读人：{leaderName}",
+    "intro": "{leaderIntro}"
+  },
+  "activityInfo": {
+    "time": {
+      "title": "活动时间：",
+      "content": "{date}（周四）晚 19:00-21:30"
+    },
+    "location": {
+      "title": "活动地点：",
+      "content": "前海梦工场 {roomNumber}会议室"
+    },
+    "transportation": {
+      "title": "乘车参考路线：",
+      "content": "地铁9号线梦海站C出口"
+    }
+  },
+  "notes": {
+    "title": "温馨提示：",
+    "items": [
+      "只要您喜欢读书和分享，即可报名参加活动，无论是否读过嘉宾推荐书目；",
+      "请您根据本期主题，做些交流分享的会前思考；",
+      "因接待能力有限，为保证活动质量，本次线下活动接龙限制15人"
+    ]
+  },
+  "registration": {
+    "title": "报名方式：",
+    "content": "微信接龙：{wechatLink}"
+  },
+  "meetingRooms": [
+    {
+      "building": "10栋",
+      "room": "106"
+    },
+    {
+      "building": "5栋",
+      "room": "208"
+    }
+  ]
+} 
