@@ -49,74 +49,92 @@ class BookScheduleManager {
    */
   async fetchBookSchedule(databaseId) {
     try {
-      // 如果没有提供databaseId，从配置中获取
-      const dbId = databaseId || config.getDatabaseId('booklist');
-      console.log(`正在获取历史书单数据...`);
-      console.log(`数据库: ${config.databases.booklist.name} (${dbId})`);
-      
-      // 先获取数据库结构
-      const structure = await this.getDatabaseStructure(dbId);
-      if (!structure) {
-        throw new Error('无法获取数据库结构');
-      }
-
-      // 查询数据库内容，按时间从近到远排序
       const response = await this.notion.databases.query({
-        database_id: dbId,
+        database_id: this.bookListDatabaseId,
         sorts: [
           {
-            property: '排期',
-            direction: 'descending'  // 降序排序
+            property: "排期",
+            direction: "descending"
           }
         ]
       });
 
-      console.log(`\n找到 ${response.results.length} 条记录`);
+      const schedule = response.results
+        .map(page => {
+          const properties = page.properties;
+          const bookName = properties["书名"]?.title?.[0]?.plain_text || "";
+          const date = properties["排期"]?.date?.start || "";
+          const leaderName = properties["领读人"]?.rich_text?.[0]?.plain_text || "未指定";
+          const hostName = properties["主持人"]?.rich_text?.[0]?.plain_text || "未指定";
 
-      const schedules = response.results.map(page => {
-        const bookName = page.properties['书名']?.title[0]?.plain_text;
-        const leaderName = page.properties['领读人']?.rich_text[0]?.plain_text;
-        const date = page.properties['排期']?.date?.start;
-        
-        // 从书名中提取期数（如果有）
-        let period = null;
-        if (bookName) {
-          const match = bookName.match(/第(\d+)期/);
-          if (match) {
-            period = parseInt(match[1]);
+          // 数据验证
+          if (!bookName || !date) {
+            console.warn(`警告：发现无效记录，缺少必要字段 - 书名: ${bookName}, 日期: ${date}`);
+            return null;
           }
-        }
 
-        // 打印每条记录的详细信息
-        console.log('\n记录详情:');
-        console.log('- 书名:', bookName);
-        console.log('- 领读人:', leaderName);
-        console.log('- 日期:', date);
-        console.log('- 提取的期数:', period);
+          // 验证日期格式
+          if (!this.isValidDate(date)) {
+            console.warn(`警告：发现无效日期格式 - ${date}`);
+            return null;
+          }
 
-        return {
-          period,
-          date,
-          bookName,
-          leaderName
-        };
-      });
+          return {
+            date,
+            bookName,
+            leaderName,
+            hostName
+          };
+        })
+        .filter(record => record !== null);
 
-      // 过滤有效记录
-      const validSchedules = schedules.filter(item => {
-        const isValid = item.bookName && item.date; // 放宽限制，只要求有书名和日期
-        if (!isValid) {
-          console.log('\n无效记录:', item);
-        }
-        return isValid;
-      });
-
-      console.log(`\n找到 ${validSchedules.length} 条有效记录`);
-      return validSchedules;
+      return schedule;
     } catch (error) {
-      console.error('获取书单失败:', error.message);
+      console.error("获取书单数据失败:", error);
       return [];
     }
+  }
+
+  // 添加日期验证方法
+  isValidDate(dateString) {
+    const date = new Date(dateString);
+    return date instanceof Date && !isNaN(date);
+  }
+
+  // 添加数据验证方法
+  validateScheduleData(schedule) {
+    if (!Array.isArray(schedule)) {
+      console.error("错误：排期数据必须是数组");
+      return false;
+    }
+
+    const requiredFields = ["date", "bookName", "leaderName", "hostName"];
+    
+    for (const record of schedule) {
+      // 检查必要字段
+      for (const field of requiredFields) {
+        if (!(field in record)) {
+          console.error(`错误：记录缺少必要字段 ${field}`);
+          return false;
+        }
+      }
+
+      // 验证日期格式
+      if (!this.isValidDate(record.date)) {
+        console.error(`错误：无效的日期格式 - ${record.date}`);
+        return false;
+      }
+
+      // 验证字段类型
+      if (typeof record.bookName !== "string" || 
+          typeof record.leaderName !== "string" || 
+          typeof record.hostName !== "string") {
+        console.error("错误：字段类型不正确");
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -184,21 +202,22 @@ class BookScheduleManager {
    */
   async saveSchedule(schedule) {
     try {
-      const scheduleData = {
+      // 添加数据验证
+      if (!this.validateScheduleData(schedule)) {
+        throw new Error("数据验证失败");
+      }
+
+      const scheduleInfo = {
         lastUpdated: new Date().toISOString(),
-        schedule: schedule.sort((a, b) => {
-          // 总是按日期从近到远排序
-          return new Date(b.date) - new Date(a.date);
-        })
+        schedule
       };
 
-      fs.writeFileSync(
+      await fs.writeFile(
         this.schedulePath,
-        JSON.stringify(scheduleData, null, 2),
-        'utf8'
+        JSON.stringify(scheduleInfo, null, 2),
+        "utf8"
       );
-
-      console.log('排期信息已保存到:', this.schedulePath);
+      console.log("排期信息已保存到本地文件");
       
       // 分析排期模式
       this.analyzeSchedulePattern(schedule);
@@ -210,7 +229,8 @@ class BookScheduleManager {
         console.log(`${periodText}: ${item.date} - ${item.bookName} (领读人: ${item.leaderName || '待定'})`);
       });
     } catch (error) {
-      console.error('保存排期信息失败:', error.message);
+      console.error("保存排期信息失败:", error);
+      throw error;
     }
   }
 
