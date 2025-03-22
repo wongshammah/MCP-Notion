@@ -14,7 +14,8 @@
     "analyze-schedule": "node scripts/analyze-book-schedule.js",
     "show-fields": "node scripts/show-database-fields.js",
     "show-full-booklist": "node scripts/show-full-booklist.js",
-    "show-commands": "node scripts/show-commands.js"
+    "show-commands": "node scripts/show-commands.js",
+    "test-notion-api": "node scripts/test-notion-api.js"
   },
   "keywords": [
     "notion",

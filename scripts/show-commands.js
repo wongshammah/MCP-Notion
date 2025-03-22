@@ -32,6 +32,10 @@ const commands = [
   {
     command: 'npm run show-full-booklist',
     description: '显示完整的书单信息，支持字段过滤'
+  },
+  {
+    command: 'npm run test-notion-api',
+    description: '测试Notion API功能，包括创建模板、更新排期等'
   }
 ];
 

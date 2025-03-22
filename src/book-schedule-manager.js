@@ -264,6 +264,298 @@ class BookScheduleManager {
   }
 
   /**
+   * 在Notion数据库中创建新记录 - 使用"读书计划"模板结构
+   * @param {Object} schedule - 要创建的排期信息
+   * @returns {Promise<Object>} 创建的页面信息
+   */
+  async createNotionRecord(schedule) {
+    try {
+      console.log(`开始创建"读书计划"记录: ${schedule.date} - ${schedule.bookName}`);
+      
+      // 第一阶段: 创建主页面
+      const mainPage = await this.createMainPage(schedule);
+      console.log(`主页面创建成功，ID: ${mainPage.id}`);
+      
+      // 第二阶段: 创建子数据库
+      const childDb = await this.createChildDatabase(mainPage.id);
+      console.log(`子数据库创建成功，ID: ${childDb.id}`);
+      
+      // 第三阶段: 创建子数据库中的预设记录
+      await this.createDefaultRecords(childDb.id);
+      console.log(`预设记录创建成功`);
+      
+      return mainPage;
+    } catch (error) {
+      console.error(`创建"读书计划"记录失败: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * 创建主页面
+   * @param {Object} schedule - 排期信息
+   * @returns {Promise<Object>} 创建的页面信息
+   */
+  async createMainPage(schedule) {
+    try {
+      return await this.notion.pages.create({
+        parent: {
+          database_id: this.bookListDatabaseId
+        },
+        icon: {
+          type: "emoji",
+          emoji: "🍀"
+        },
+        properties: {
+          "书名": {
+            title: [
+              {
+                text: {
+                  content: schedule.bookName
+                }
+              }
+            ]
+          },
+          "排期": {
+            date: {
+              start: schedule.date
+            }
+          },
+          "领读人": {
+            rich_text: [
+              {
+                text: {
+                  content: schedule.leaderName || "未指定"
+                }
+              }
+            ]
+          },
+          "主持人": {
+            rich_text: [
+              {
+                text: {
+                  content: schedule.hostName || "未指定"
+                }
+              }
+            ]
+          },
+          "进度": {
+            status: {
+              name: "筹备中"
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error(`创建主页面失败: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * 创建子数据库
+   * @param {string} parentPageId - 父页面ID
+   * @returns {Promise<Object>} 创建的数据库信息
+   */
+  async createChildDatabase(parentPageId) {
+    try {
+      // 创建基本数据库（使用select属性代替status）
+      return await this.notion.databases.create({
+        parent: { 
+          type: "page_id", 
+          page_id: parentPageId 
+        },
+        title: [
+          {
+            type: "text",
+            text: {
+              content: "归档"
+            }
+          }
+        ],
+        is_inline: true, // 在父页面中内联显示数据库
+        properties: {
+          "Name": {
+            title: {}
+          },
+          "Status": {
+            select: {
+              options: [
+                {
+                  name: "Not started",
+                  color: "default"
+                },
+                {
+                  name: "In progress",
+                  color: "blue"
+                },
+                {
+                  name: "Done",
+                  color: "green"
+                }
+              ]
+            }
+          }
+        }
+      });
+    } catch (error) {
+      console.error(`创建子数据库失败: ${error.message}`);
+      throw error;
+    }
+  }
+  
+  /**
+   * 在子数据库中创建预设记录
+   * @param {string} databaseId - 子数据库ID
+   * @returns {Promise<void>}
+   */
+  async createDefaultRecords(databaseId) {
+    const defaultRecords = [
+      { name: "邀请函", icon: "📨" },
+      { name: "简报", icon: "📝" },
+      { name: "讲书稿", icon: "📚" }
+    ];
+    
+    try {
+      for (const record of defaultRecords) {
+        await this.notion.pages.create({
+          parent: {
+            database_id: databaseId
+          },
+          icon: {
+            type: "emoji",
+            emoji: record.icon
+          },
+          properties: {
+            "Name": {
+              title: [
+                {
+                  text: {
+                    content: record.name
+                  }
+                }
+              ]
+            },
+            "Status": {
+              select: {
+                name: "Not started"
+              }
+            }
+          }
+        });
+        console.log(`创建预设记录: ${record.name}`);
+      }
+    } catch (error) {
+      console.error(`创建预设记录失败: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 在Notion数据库中查找页面
+   * @param {string} date - 日期
+   * @param {string} bookName - 书名
+   * @returns {Promise<Object|null>} 页面信息或null
+   */
+  async findNotionPage(date, bookName) {
+    try {
+      const response = await this.notion.databases.query({
+        database_id: this.bookListDatabaseId,
+        filter: {
+          and: [
+            {
+              property: "排期",
+              date: {
+                equals: date
+              }
+            }
+          ]
+        }
+      });
+      
+      if (response.results.length === 0) {
+        return null;
+      }
+      
+      // 可能有同一天多个排期，需要进一步匹配书名
+      for (const page of response.results) {
+        const pageName = page.properties["书名"]?.title?.[0]?.plain_text || "";
+        if (pageName === bookName) {
+          return page;
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`查找页面失败: ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * 更新Notion页面
+   * @param {string} pageId - 页面ID
+   * @param {Object} schedule - 更新的排期信息
+   * @returns {Promise<Object>} 更新后的页面信息
+   */
+  async updateNotionPage(pageId, schedule) {
+    try {
+      const response = await this.notion.pages.update({
+        page_id: pageId,
+        properties: {
+          "领读人": {
+            rich_text: [
+              {
+                text: {
+                  content: schedule.leaderName || "未指定"
+                }
+              }
+            ]
+          },
+          "主持人": {
+            rich_text: [
+              {
+                text: {
+                  content: schedule.hostName || "未指定"
+                }
+              }
+            ]
+          }
+        }
+      });
+      
+      console.log(`成功更新排期: ${schedule.date} - ${schedule.bookName}`);
+      return response;
+    } catch (error) {
+      console.error(`更新排期失败: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * 创建或更新Notion记录
+   * @param {Object} schedule - 排期信息
+   * @returns {Promise<Object>} 操作结果
+   */
+  async createOrUpdateNotionRecord(schedule) {
+    try {
+      // 先查找是否存在相同日期和书名的记录
+      const existingPage = await this.findNotionPage(schedule.date, schedule.bookName);
+      
+      if (existingPage) {
+        // 如果找到匹配的记录，则更新
+        return await this.updateNotionPage(existingPage.id, schedule);
+      } else {
+        // 如果没有找到匹配的记录，则创建新记录
+        return await this.createNotionRecord(schedule);
+      }
+    } catch (error) {
+      console.error(`操作Notion记录失败: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
    * 添加新的排期
    * @param {Object} schedule - 新的排期信息
    * @param {number} schedule.period - 期数
