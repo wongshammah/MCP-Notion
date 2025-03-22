@@ -7,13 +7,14 @@
     "start": "node src/notion-mcp-server.js",
     "test": "node test-notion-connection.js",
     "generate": "node -e \"const InvitationGenerator = require('./src/invitation-generator'); const generator = new InvitationGenerator(); console.log(generator.generateText(require('./example.json')));\"",
-    "fetch-schedule": "node scripts/fetch-book-schedule.js",
-    "check-schedule": "node scripts/check-schedule-diff.js",
+    "fetch-schedule": "node --no-warnings scripts/fetch-book-schedule.js",
+    "check-schedule": "node --no-warnings scripts/check-schedule-diff.js",
     "update-schedule": "node scripts/update-local-schedule.js",
     "invitation": "node scripts/generate-invitation.js",
     "analyze-schedule": "node scripts/analyze-book-schedule.js",
     "show-fields": "node scripts/show-database-fields.js",
-    "show-full-booklist": "node scripts/show-full-booklist.js"
+    "show-full-booklist": "node scripts/show-full-booklist.js",
+    "show-commands": "node scripts/show-commands.js"
   },
   "keywords": [
     "notion",

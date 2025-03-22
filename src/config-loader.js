@@ -53,15 +53,42 @@ class Config {
    * @throws {Error} 当必需的配置缺失时抛出错误
    */
   validate() {
+    this.validateConfig();
+  }
+
+  validateConfig() {
+    // 检查环境变量
     const requiredEnvVars = [
-      { name: 'NOTION_API_KEY', value: this.notion.apiKey },
-      { name: 'NOTION_BOOKLIST_DATABASE_ID', value: this.databases.booklist.id }
+      'NOTION_API_KEY',
+      'NOTION_BOOKLIST_DATABASE_ID'
     ];
 
-    const missingVars = requiredEnvVars.filter(v => !v.value);
-    if (missingVars.length > 0) {
-      const missingVarNames = missingVars.map(v => v.name).join(', ');
-      throw new Error(`缺少必需的环境变量: ${missingVarNames}`);
+    const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    if (missingEnvVars.length > 0) {
+      throw new Error(`缺少必要的环境变量: ${missingEnvVars.join(', ')}`);
+    }
+
+    // 检查数据库配置
+    if (!this.databases.booklist) {
+      throw new Error('缺少书单数据库配置');
+    }
+
+    if (!this.databases.booklist.id) {
+      throw new Error('缺少书单数据库ID');
+    }
+
+    if (!this.databases.booklist.name) {
+      throw new Error('缺少书单数据库名称');
+    }
+
+    // 检查API密钥
+    if (!this.notion.apiKey) {
+      throw new Error('缺少Notion API密钥');
+    }
+
+    // 检查数据库ID格式
+    if (!this.isValidUUID(this.databases.booklist.id)) {
+      throw new Error('书单数据库ID格式无效');
     }
   }
 
@@ -87,6 +114,11 @@ class Config {
       throw new Error(`未知的数据库名称: ${name}`);
     }
     return database.id;
+  }
+
+  isValidUUID(uuid) {
+    // Implement your UUID validation logic here
+    return true; // Placeholder return, actual implementation needed
   }
 }
 

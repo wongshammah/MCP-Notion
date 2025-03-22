@@ -17,6 +17,8 @@ class BookScheduleManager {
     // 如果提供了token，使用它；否则从配置中读取
     this.notion = new Client({ auth: token || config.notion.apiKey });
     this.schedulePath = path.join(__dirname, '../config/book-schedule.json');
+    // 从配置中获取数据库ID
+    this.bookListDatabaseId = config.databases.booklist.id;
   }
 
   /**
@@ -49,8 +51,15 @@ class BookScheduleManager {
    */
   async fetchBookSchedule(databaseId) {
     try {
+      // 使用传入的databaseId或配置中的databaseId
+      const targetDatabaseId = databaseId || this.bookListDatabaseId;
+      
+      if (!targetDatabaseId) {
+        throw new Error('未提供数据库ID，请在配置文件中设置 NOTION_BOOKLIST_DATABASE_ID');
+      }
+
       const response = await this.notion.databases.query({
-        database_id: this.bookListDatabaseId,
+        database_id: targetDatabaseId,
         sorts: [
           {
             property: "排期",
@@ -212,7 +221,7 @@ class BookScheduleManager {
         schedule
       };
 
-      await fs.writeFile(
+      await fs.promises.writeFile(
         this.schedulePath,
         JSON.stringify(scheduleInfo, null, 2),
         "utf8"
