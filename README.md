@@ -70,7 +70,7 @@ npm run invitation
 MCP-Notion/
 ├── config/                 # 配置文件目录
 │   ├── invitation.template.json  # 邀请函模板
-│   ├── leaders.json        # 领读人信息
+│   ├── leaders.json        # 领读人和主持人信息
 │   └── book-schedule.json  # 书单排期数据（由脚本生成）
 ├── output/                 # 生成的邀请函输出目录
 ├── scripts/                # 脚本工具目录
@@ -133,13 +133,12 @@ MCP-Notion/
 
 ### 领读人配置 (config/leaders.json)
 
-领读人配置文件包含所有可用领读人的信息：
+领读人配置文件包含所有可用领读人和主持人的信息：
 
-- `name`: 领读人姓名
-- `title`: 领读人头衔
+- `name`: 姓名
+- `title`: 头衔/职称
 - `intro`: 个人简介
-- `expertise`: 专业领域
-- `books`: 推荐书目
+- `isHost`: 是否可作为主持人（布尔值）
 
 ## 使用方法
 

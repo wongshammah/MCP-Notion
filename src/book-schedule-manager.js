@@ -7,6 +7,7 @@ const { Client } = require('@notionhq/client');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config-loader');
+const InvitationGenerator = require('./invitation-generator');
 
 class BookScheduleManager {
   /**
@@ -16,9 +17,15 @@ class BookScheduleManager {
   constructor(token) {
     // 如果提供了token，使用它；否则从配置中读取
     this.notion = new Client({ auth: token || config.notion.apiKey });
-    this.schedulePath = path.join(__dirname, '../config/book-schedule.json');
+    this.dataFilePath = path.join(__dirname, '../config/book-schedule.json');
     // 从配置中获取数据库ID
     this.bookListDatabaseId = config.databases.booklist.id;
+    
+    // 存储当前正在创建的排期
+    this.currentCreateSchedule = null;
+    
+    // 加载本地数据
+    this.loadLocalData();
   }
 
   /**
@@ -222,7 +229,7 @@ class BookScheduleManager {
       };
 
       await fs.promises.writeFile(
-        this.schedulePath,
+        this.dataFilePath,
         JSON.stringify(scheduleInfo, null, 2),
         "utf8"
       );
@@ -244,23 +251,11 @@ class BookScheduleManager {
   }
 
   /**
-   * 获取最新的排期信息
-   * @returns {Object|null} 最新的排期信息
+   * 获取最新排期
+   * @returns {Object|null} 最新排期信息
    */
   getLatestSchedule() {
-    try {
-      if (fs.existsSync(this.schedulePath)) {
-        const data = JSON.parse(fs.readFileSync(this.schedulePath, 'utf8'));
-        // 根据日期排序，返回日期最近的排期（而不是数组最后一个元素）
-        return data.schedule.length > 0 
-          ? data.schedule.sort((a, b) => new Date(b.date) - new Date(a.date))[0] 
-          : null;
-      }
-      return null;
-    } catch (error) {
-      console.error('读取排期信息失败:', error.message);
-      return null;
-    }
+    return this.latestScheduleData;
   }
 
   /**
@@ -271,6 +266,9 @@ class BookScheduleManager {
   async createNotionRecord(schedule) {
     try {
       console.log(`开始创建"读书计划"记录: ${schedule.date} - ${schedule.bookName}`);
+      
+      // 保存当前正在创建的排期信息
+      this.currentCreateSchedule = schedule;
       
       // 第一阶段: 创建主页面
       const mainPage = await this.createMainPage(schedule);
@@ -284,8 +282,13 @@ class BookScheduleManager {
       await this.createDefaultRecords(childDb.id);
       console.log(`预设记录创建成功`);
       
+      // 清除当前创建的排期信息
+      this.currentCreateSchedule = null;
+      
       return mainPage;
     } catch (error) {
+      // 发生错误时也清除
+      this.currentCreateSchedule = null;
       console.error(`创建"读书计划"记录失败: ${error.message}`);
       throw error;
     }
@@ -417,8 +420,55 @@ class BookScheduleManager {
     ];
     
     try {
+      // 获取当前记录的排期信息，用于生成邀请函内容
+      const schedule = this.latestScheduleData || this.currentCreateSchedule;
+      
+      // 创建邀请函生成器
+      const invitationGenerator = new InvitationGenerator();
+      
       for (const record of defaultRecords) {
-        await this.notion.pages.create({
+        // 创建记录内容
+        let pageContent = {};
+        
+        // 为邀请函生成内容
+        if (record.name === "邀请函" && schedule) {
+          // 准备邀请函数据
+          const invitationData = {
+            period: schedule.period || "",
+            date: schedule.date,
+            bookName: schedule.bookName,
+            leaderName: schedule.leaderName || "未指定",
+            bookIntro: "",  // 可以为空，或从其他地方获取
+            roomNumber: "106", // 默认会议室
+            wechatLink: ""  // 可以为空，或从配置获取
+          };
+          
+          // 生成邀请函文本
+          const invitationText = invitationGenerator.generateText(invitationData);
+          
+          // 添加邀请函内容到页面
+          pageContent = {
+            children: [
+              {
+                object: "block",
+                type: "paragraph",
+                paragraph: {
+                  rich_text: [
+                    {
+                      type: "text",
+                      text: {
+                        content: invitationText
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          };
+        }
+        
+        // 创建记录
+        const pageRequest = {
           parent: {
             database_id: databaseId
           },
@@ -441,8 +491,12 @@ class BookScheduleManager {
                 name: "Not started"
               }
             }
-          }
-        });
+          },
+          // 如果有内容，添加到请求中
+          ...(Object.keys(pageContent).length > 0 ? pageContent : {})
+        };
+        
+        await this.notion.pages.create(pageRequest);
         console.log(`创建预设记录: ${record.name}`);
       }
     } catch (error) {
@@ -565,8 +619,8 @@ class BookScheduleManager {
    */
   async addSchedule(schedule) {
     try {
-      const currentSchedule = fs.existsSync(this.schedulePath)
-        ? JSON.parse(fs.readFileSync(this.schedulePath, 'utf8')).schedule
+      const currentSchedule = fs.existsSync(this.dataFilePath)
+        ? JSON.parse(fs.readFileSync(this.dataFilePath, 'utf8')).schedule
         : [];
 
       // 检查期数是否已存在（如果有期数）
@@ -578,6 +632,31 @@ class BookScheduleManager {
       await this.saveSchedule(currentSchedule);
     } catch (error) {
       console.error('添加排期失败:', error.message);
+    }
+  }
+
+  // 加载本地数据
+  loadLocalData() {
+    try {
+      // 检查数据文件是否存在
+      if (fs.existsSync(this.dataFilePath)) {
+        const data = JSON.parse(fs.readFileSync(this.dataFilePath, 'utf8'));
+        this.localSchedules = data.schedule || [];
+        
+        // 找到最新的排期
+        if (this.localSchedules.length > 0) {
+          this.latestScheduleData = this.localSchedules.sort((a, b) => 
+            new Date(b.date) - new Date(a.date)
+          )[0];
+        }
+      } else {
+        this.localSchedules = [];
+        this.latestScheduleData = null;
+      }
+    } catch (error) {
+      console.error(`加载本地数据失败: ${error.message}`);
+      this.localSchedules = [];
+      this.latestScheduleData = null;
     }
   }
 }

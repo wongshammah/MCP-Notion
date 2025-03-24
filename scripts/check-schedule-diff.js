@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const chalk = require('chalk');
 const BookScheduleManager = require('../src/book-schedule-manager');
 
 // 创建readline接口
@@ -195,6 +196,8 @@ async function showOptions(diff) {
   if (diff.localOnly.length === 0 && 
       diff.notionOnly.length === 0 && 
       diff.conflicts.length === 0) {
+    console.log('\n没有发现差异，操作完成。');
+    rl.close();
     return;
   }
 
@@ -249,6 +252,131 @@ async function showOptions(diff) {
 }
 
 /**
+ * 校验本地排期数据
+ * @param {Array} schedule - 排期数据
+ * @returns {Object} 校验结果
+ */
+function validateLocalSchedule(schedule) {
+  // 读取领读人配置
+  const leadersConfigPath = path.join(__dirname, '../config/leaders.json');
+  const leadersConfig = JSON.parse(fs.readFileSync(leadersConfigPath, 'utf8')).leaders || {};
+  
+  // 从领读人配置中提取主持人配置
+  const hostsConfig = {};
+  Object.entries(leadersConfig).forEach(([key, value]) => {
+    if (value.isHost) {
+      hostsConfig[key] = value;
+    }
+  });
+  
+  const result = {
+    invalidLeaders: [],
+    invalidHosts: [],
+    duplicateDates: [],
+    isValid: true
+  };
+  
+  // 检查领读人和主持人
+  schedule.forEach(item => {
+    // 检查领读人
+    if (item.leaderName && item.leaderName !== "未指定") {
+      console.log(`检查领读人: "${item.leaderName}" (${item.date} - ${item.bookName})`);
+      if (!leadersConfig[item.leaderName]) {
+        console.log(`  ❌ 领读人 "${item.leaderName}" 不在配置中，可用领读人: ${Object.keys(leadersConfig).join(', ')}`);
+        result.invalidLeaders.push({
+          date: item.date,
+          bookName: item.bookName,
+          leaderName: item.leaderName
+        });
+        result.isValid = false;
+      } else {
+        console.log(`  ✅ 领读人 "${item.leaderName}" 已配置`);
+      }
+    }
+    
+    // 检查主持人
+    if (item.hostName && item.hostName !== "未指定") {
+      console.log(`检查主持人: "${item.hostName}" (${item.date} - ${item.bookName})`);
+      if (!hostsConfig[item.hostName]) {
+        console.log(`  ❌ 主持人 "${item.hostName}" 不在配置中或不是主持人角色，可用主持人: ${Object.keys(hostsConfig).join(', ')}`);
+        result.invalidHosts.push({
+          date: item.date,
+          bookName: item.bookName,
+          hostName: item.hostName
+        });
+        result.isValid = false;
+      } else {
+        console.log(`  ✅ 主持人 "${item.hostName}" 已配置`);
+      }
+    }
+  });
+  
+  // 检查日期重复
+  const dateMap = {};
+  schedule.forEach(item => {
+    if (!dateMap[item.date]) {
+      dateMap[item.date] = [];
+    }
+    dateMap[item.date].push(item);
+  });
+  
+  // 检查每个日期是否有多条记录
+  Object.entries(dateMap).forEach(([date, items]) => {
+    if (items.length > 1) {
+      result.duplicateDates.push({
+        date,
+        items: items.map(item => ({
+          bookName: item.bookName,
+          leaderName: item.leaderName
+        }))
+      });
+      result.isValid = false;
+    }
+  });
+  
+  return result;
+}
+
+/**
+ * 显示校验结果
+ * @param {Object} validationResult - 校验结果
+ */
+function displayValidationResult(validationResult) {
+  if (validationResult.isValid) {
+    console.log(chalk.green('\n✓ 本地排期数据校验通过'));
+    return;
+  }
+  
+  console.log(chalk.yellow('\n⚠ 本地排期数据校验发现以下问题:'));
+  
+  if (validationResult.invalidLeaders.length > 0) {
+    console.log(chalk.red('\n以下排期的领读人不在配置中:'));
+    validationResult.invalidLeaders.forEach(item => {
+      console.log(`- ${item.date} - ${item.bookName} - 领读人: ${chalk.red(item.leaderName)}`);
+    });
+  }
+  
+  if (validationResult.invalidHosts.length > 0) {
+    console.log(chalk.red('\n以下排期的主持人不在配置中:'));
+    validationResult.invalidHosts.forEach(item => {
+      console.log(`- ${item.date} - ${item.bookName} - 主持人: ${chalk.red(item.hostName)}`);
+    });
+  }
+  
+  if (validationResult.duplicateDates.length > 0) {
+    console.log(chalk.red('\n以下日期存在多条排期记录:'));
+    validationResult.duplicateDates.forEach(item => {
+      console.log(`- ${item.date} 有 ${item.items.length} 条记录:`);
+      item.items.forEach((record, index) => {
+        console.log(`  ${index + 1}. ${record.bookName} (领读人: ${record.leaderName})`);
+      });
+    });
+  }
+  
+  console.log(chalk.yellow('\n请修正上述问题后再继续操作。'));
+}
+
+/**
  * 主函数
  */
 async function main() {
@@ -259,6 +387,21 @@ async function main() {
     const schedulePath = path.join(__dirname, '../config/book-schedule.json');
     const localData = JSON.parse(fs.readFileSync(schedulePath, 'utf8'));
     console.log(`已读取本地排期: ${localData.schedule.length}项`);
+    
+    // 校验本地排期数据
+    console.log('\n正在校验本地排期数据...');
+    const validationResult = validateLocalSchedule(localData.schedule);
+    displayValidationResult(validationResult);
+    
+    // 如果校验不通过，询问是否继续
+    if (!validationResult.isValid) {
+      const continueAnswer = await question(chalk.yellow('\n是否忽略警告继续操作？(y/n): '));
+      if (continueAnswer.toLowerCase() !== 'y') {
+        console.log('操作已取消');
+        rl.close();
+        return;
+      }
+    }
     
     // 获取 Notion 数据库结构
     const manager = new BookScheduleManager();

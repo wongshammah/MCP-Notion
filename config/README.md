@@ -5,7 +5,7 @@
 ## 配置文件概览
 
 - `invitation.template.json`: 邀请函模板
-- `leaders.json`: 领读人信息
+- `leaders.json`: 领读人和主持人信息（使用isHost字段标识主持人角色）
 - `book-schedule.json`: 书单排期数据
 
 ## 环境变量配置
