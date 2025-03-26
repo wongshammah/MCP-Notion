@@ -24,15 +24,56 @@ if (global.TEST_MODE) {
 }
 
 const app = express();
-const port = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001');
+console.log(`尝试在端口 ${PORT} 上启动服务器...`);
 
 // 中间件
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'https://yourdomain.com' 
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 app.use(express.json());
 
 // API路由
 app.use('/api/leaders', leadersRouter);
 app.use('/api/schedules', schedulesRouter);
+
+// 验证Notion API配置
+async function validateNotionConfig() {
+  if (global.TEST_MODE) {
+    console.log('系统运行在测试模式，跳过Notion API验证');
+    return;
+  }
+  
+  if (!process.env.NOTION_API_KEY) {
+    console.error('错误: 未设置NOTION_API_KEY环境变量');
+    return;
+  }
+  
+  if (!process.env.NOTION_BOOKLIST_DATABASE_ID) {
+    console.error('错误: 未设置NOTION_BOOKLIST_DATABASE_ID环境变量');
+    return;
+  }
+  
+  try {
+    const { Client } = require('@notionhq/client');
+    const notion = new Client({ auth: process.env.NOTION_API_KEY });
+    
+    console.log('正在验证Notion API密钥和数据库ID...');
+    await notion.databases.retrieve({
+      database_id: process.env.NOTION_BOOKLIST_DATABASE_ID,
+    });
+    console.log('✅ Notion API密钥和数据库ID验证成功!');
+  } catch (error) {
+    console.error('❌ Notion API验证失败:', error.message);
+    console.error('请检查您的API密钥和数据库ID是否正确，以及是否有足够的权限访问该数据库');
+    console.log('系统将在本地模式下运行，不会与Notion同步');
+  }
+}
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
@@ -40,23 +81,19 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-// 测试Notion API连接
-const { Client } = require('@notionhq/client');
-const notion = new Client({ auth: process.env.NOTION_API_KEY });
-
-async function testNotionConnection() {
-  try {
-    await notion.databases.query({
-      database_id: process.env.NOTION_BOOKLIST_DATABASE_ID
+// 尝试启动服务器
+const server = app.listen(PORT, () => {
+  console.log(`服务器成功运行在 http://localhost:${PORT}`);
+  validateNotionConfig();
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`端口 ${PORT} 已被占用，尝试使用端口 ${PORT + 1}`);
+    // 尝试其他端口
+    app.listen(PORT + 1, () => {
+      console.log(`服务器运行在 http://localhost:${PORT + 1}`);
+      validateNotionConfig();
     });
-    console.log('Notion API连接测试成功！');
-  } catch (error) {
-    console.log('Notion API连接测试失败:', error.message);
-    console.log('请检查 NOTION_API_KEY 是否正确设置');
+  } else {
+    console.error('服务器启动失败:', err);
   }
-}
-
-app.listen(port, () => {
-  console.log(`服务器运行在 http://localhost:${port}`);
-  testNotionConnection();
 }); 

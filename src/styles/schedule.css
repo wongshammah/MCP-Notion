@@ -1,0 +1,76 @@
+/* 排期管理样式 */
+
+/* 日历视图样式 */
+.calendar-view {
+  background: #fff;
+  border-radius: 4px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.calendar-schedule {
+  padding: 4px;
+  background: #f0f5ff;
+  border-radius: 4px;
+  border-left: 3px solid #1890ff;
+  margin-bottom: 4px;
+  font-size: 12px;
+  max-height: 80px;
+  overflow: hidden;
+}
+
+.calendar-schedule .book-title {
+  font-weight: bold;
+  color: #1890ff;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 同步状态样式 */
+.sync-status {
+  margin-top: 8px;
+  padding: 8px;
+  background-color: #f6f6f6;
+  border-radius: 4px;
+}
+
+.sync-status.success {
+  background-color: #f6ffed;
+  border: 1px solid #b7eb8f;
+}
+
+.sync-status.error {
+  background-color: #fff2f0;
+  border: 1px solid #ffccc7;
+}
+
+.sync-details {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #888;
+}
+
+/* 排期表单样式 */
+.schedule-form .ant-form-item {
+  margin-bottom: 16px;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .calendar-schedule {
+    font-size: 10px;
+    max-height: 60px;
+  }
+  
+  .ant-space {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .ant-space .ant-btn {
+    margin-bottom: 8px;
+  }
+} 

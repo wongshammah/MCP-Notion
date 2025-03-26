@@ -7,10 +7,13 @@ const SCHEDULE_FILE_PATH = path.join(__dirname, '../../config/book-schedule.json
 
 // 仅在非测试模式下初始化Notion客户端
 let notion = null;
-if (!global.TEST_MODE) {
+
+if (!global.TEST_MODE && process.env.NOTION_API_KEY && process.env.NOTION_BOOKLIST_DATABASE_ID) {
   try {
     const { Client } = require('@notionhq/client');
-    notion = new Client({ auth: process.env.NOTION_API_KEY });
+    notion = new Client({ 
+      auth: process.env.NOTION_API_KEY
+    });
     console.log('Notion客户端初始化成功');
   } catch (error) {
     console.error('Notion客户端初始化失败:', error.message);
@@ -18,6 +21,30 @@ if (!global.TEST_MODE) {
 }
 
 const NOTION_DATABASE_ID = process.env.NOTION_BOOKLIST_DATABASE_ID;
+
+// 验证Notion配置是否正确
+async function validateNotionConfig() {
+  if (!notion) return false;
+  
+  if (!process.env.NOTION_BOOKLIST_DATABASE_ID) {
+    console.error('错误: 未设置NOTION_BOOKLIST_DATABASE_ID环境变量');
+    return false;
+  }
+  
+  try {
+    // 尝试查询一条记录，验证API密钥和数据库ID是否有效
+    await notion.databases.query({
+      database_id: process.env.NOTION_BOOKLIST_DATABASE_ID,
+      page_size: 1
+    });
+    console.log('Notion配置验证成功，API密钥和数据库ID有效');
+    return true;
+  } catch (error) {
+    console.error('Notion配置验证失败:', error.message);
+    console.error('请确保API密钥有效且有权限访问指定的数据库');
+    return false;
+  }
+}
 
 // 读取book-schedule.json文件
 async function readScheduleFile() {
@@ -164,10 +191,18 @@ router.delete('/:date', async (req, res) => {
 // 同步到Notion
 router.post('/sync', async (req, res) => {
   // 如果在测试模式，返回提示消息
-  if (global.TEST_MODE || !notion) {
+  if (global.TEST_MODE) {
     return res.status(400).json({ 
       error: '系统在测试模式运行，Notion同步功能不可用',
-      message: '请设置正确的NOTION_API_KEY和NOTION_BOOKLIST_DATABASE_ID环境变量'
+      message: '请设置TEST_MODE=false并配置有效的NOTION_API_KEY和NOTION_BOOKLIST_DATABASE_ID'
+    });
+  }
+  
+  // 验证Notion配置
+  if (!await validateNotionConfig()) {
+    return res.status(400).json({ 
+      error: 'Notion配置无效',
+      message: '请检查API密钥和数据库ID是否正确设置，以及是否有足够的权限'
     });
   }
   

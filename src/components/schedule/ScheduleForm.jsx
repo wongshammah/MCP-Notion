@@ -1,42 +1,38 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, DatePicker, Select, Button, Space, message } from 'antd';
 import moment from 'moment';
+import { api, API_ENDPOINTS } from '../../utils/api';
 
 const { Option } = Select;
 
-const ScheduleForm = ({ initialValues, onSubmit, onCancel, confirmLoading }) => {
+const ScheduleForm = ({ initialValues, onSubmit, onCancel }) => {
   const [form] = Form.useForm();
   const [leaders, setLeaders] = useState([]);
   const [hosts, setHosts] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // 加载领读人和主持人列表
+  // 获取领导者和主持人列表
   useEffect(() => {
     const fetchLeaders = async () => {
       setLoading(true);
       try {
-        const response = await fetch('http://localhost:3001/api/leaders');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('获取到的领读人数据:', data); // 调试信息
+        const data = await api.get(API_ENDPOINTS.LEADERS);
         
         // 确保数据是数组
-        const leadersArray = Array.isArray(data) ? data : [];
-        
-        // 所有领读人
-        setLeaders(leadersArray);
-        
-        // 只有主持人
-        const hostsOnly = leadersArray.filter(leader => leader.isHost);
-        setHosts(hostsOnly);
+        if (Array.isArray(data)) {
+          // 分离领导者和主持人
+          const allLeaders = data.map(l => l.name);
+          const hostLeaders = data.filter(l => l.isHost).map(l => l.name);
+          
+          setLeaders(allLeaders);
+          setHosts(hostLeaders);
+        } else {
+          console.error('获取到的领导者数据格式不正确');
+          message.error('获取领导者数据失败，请刷新页面重试');
+        }
       } catch (error) {
-        console.error('获取领读人列表失败:', error);
-        message.error('获取领读人列表失败，请重试');
-        // 设置为空数组避免错误
-        setLeaders([]);
-        setHosts([]);
+        console.error('获取领导者失败:', error);
+        message.error(`获取领导者失败: ${error.message}`);
       } finally {
         setLoading(false);
       }
@@ -45,101 +41,96 @@ const ScheduleForm = ({ initialValues, onSubmit, onCancel, confirmLoading }) => 
     fetchLeaders();
   }, []);
 
-  // 当初始值变化时，重置表单
+  // 如果有初始值，设置表单初始值
   useEffect(() => {
     if (initialValues) {
       form.setFieldsValue({
         ...initialValues,
-        date: moment(initialValues.date),
+        date: initialValues.date ? moment(initialValues.date) : null,
       });
-    } else {
-      form.resetFields();
     }
-  }, [initialValues, form]);
+  }, [form, initialValues]);
 
-  const handleFinish = (values) => {
+  // 提交表单
+  const handleSubmit = async (values) => {
+    // 格式化日期
     const formattedValues = {
       ...values,
       date: values.date.format('YYYY-MM-DD'),
     };
+    
     onSubmit(formattedValues);
   };
 
   return (
-    <div className="schedule-form-wrapper">
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleFinish}
-        initialValues={initialValues ? {
-          ...initialValues,
-          date: initialValues.date ? moment(initialValues.date) : undefined,
-        } : {}}
+    <Form
+      form={form}
+      layout="vertical"
+      onFinish={handleSubmit}
+      initialValues={initialValues ? {
+        ...initialValues,
+        date: initialValues.date ? moment(initialValues.date) : null,
+      } : {}}
+    >
+      <Form.Item
+        name="date"
+        label="日期"
+        rules={[{ required: true, message: '请选择日期' }]}
       >
-        <Form.Item
-          name="date"
-          label="日期"
-          rules={[{ required: true, message: '请选择日期' }]}
-        >
-          <DatePicker format="YYYY-MM-DD" style={{ width: '100%' }} />
-        </Form.Item>
+        <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+      </Form.Item>
 
-        <Form.Item
-          name="bookName"
-          label="书名"
-          rules={[{ required: true, message: '请输入书名' }]}
-        >
-          <Input placeholder="请输入书名" />
-        </Form.Item>
+      <Form.Item
+        name="bookName"
+        label="书名"
+        rules={[{ required: true, message: '请输入书名' }]}
+      >
+        <Input placeholder="请输入书名" />
+      </Form.Item>
 
-        <Form.Item
-          name="leaderName"
-          label="领读人"
-          rules={[{ required: true, message: '请选择领读人' }]}
+      <Form.Item
+        name="leaderName"
+        label="领读人"
+        rules={[{ required: true, message: '请选择领读人' }]}
+      >
+        <Select
+          placeholder="请选择领读人"
+          showSearch
+          loading={loading}
+          allowClear
         >
-          <Select 
-            placeholder="请选择领读人" 
-            loading={loading}
-            showSearch
-            optionFilterProp="children"
-          >
-            {leaders.map(leader => (
-              <Option key={leader.id} value={leader.name}>
-                {leader.name} {leader.isHost ? '(主持人)' : ''}
-              </Option>
-            ))}
-            <Option value="未指定">未指定</Option>
-          </Select>
-        </Form.Item>
+          {leaders.map(name => (
+            <Option key={name} value={name}>{name}</Option>
+          ))}
+        </Select>
+      </Form.Item>
 
-        <Form.Item
-          name="hostName"
-          label="主持人"
-          rules={[{ required: true, message: '请选择主持人' }]}
+      <Form.Item
+        name="hostName"
+        label="主持人"
+        rules={[{ required: true, message: '请选择主持人' }]}
+      >
+        <Select
+          placeholder="请选择主持人"
+          showSearch
+          loading={loading}
+          allowClear
         >
-          <Select 
-            placeholder="请选择主持人" 
-            loading={loading}
-            showSearch
-            optionFilterProp="children"
-          >
-            {hosts.map(host => (
-              <Option key={host.id} value={host.name}>{host.name}</Option>
-            ))}
-            <Option value="未指定">未指定</Option>
-          </Select>
-        </Form.Item>
+          {hosts.map(name => (
+            <Option key={name} value={name}>{name}</Option>
+          ))}
+        </Select>
+      </Form.Item>
 
-        <Form.Item>
-          <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
-            <Button onClick={onCancel}>取消</Button>
-            <Button type="primary" htmlType="submit" loading={confirmLoading}>
-              {initialValues ? '更新' : '添加'}
-            </Button>
-          </Space>
-        </Form.Item>
-      </Form>
-    </div>
+      <Form.Item>
+        <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+          <Button onClick={onCancel}>取消</Button>
+          <Button type="primary" htmlType="submit">
+            {initialValues ? '更新' : '添加'}
+          </Button>
+        </Space>
+      </Form.Item>
+    </Form>
   );
 };
 

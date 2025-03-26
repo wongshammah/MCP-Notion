@@ -244,5 +244,87 @@ function showTestMenu() {
   });
 }
 
+// 加载环境变量
+require('dotenv').config();
+
+// 检查重要的环境变量
+console.log('环境变量检查:');
+console.log('- NOTION_API_KEY:', process.env.NOTION_API_KEY ? '已设置' : '未设置');
+console.log('- NOTION_BOOKLIST_DATABASE_ID:', process.env.NOTION_BOOKLIST_DATABASE_ID ? '已设置' : '未设置');
+console.log('- TEST_MODE:', process.env.TEST_MODE);
+
+// 尝试初始化Notion客户端
+async function testNotionConnection() {
+  try {
+    const { Client } = require('@notionhq/client');
+    console.log('\n正在初始化Notion客户端...');
+    
+    const notion = new Client({ 
+      auth: process.env.NOTION_API_KEY,
+      logLevel: 'debug'
+    });
+    
+    console.log('Notion客户端已初始化');
+    
+    try {
+      console.log(`\n正在尝试查询数据库 (${process.env.NOTION_BOOKLIST_DATABASE_ID})...`);
+      const response = await notion.databases.retrieve({
+        database_id: process.env.NOTION_BOOKLIST_DATABASE_ID
+      });
+      
+      console.log('✅ 数据库查询成功!');
+      console.log('数据库标题:', response.title[0]?.plain_text || '无标题');
+      console.log('包含的属性:', Object.keys(response.properties).join(', '));
+      
+      // 尝试查询一些实际数据
+      console.log('\n正在查询数据库中的记录...');
+      const results = await notion.databases.query({
+        database_id: process.env.NOTION_BOOKLIST_DATABASE_ID,
+        page_size: 5
+      });
+      
+      console.log(`✅ 查询成功! 获取到 ${results.results.length} 条记录`);
+      
+      if (results.results.length > 0) {
+        console.log('\n第一条记录预览:');
+        const firstPage = results.results[0];
+        const properties = firstPage.properties;
+        
+        // 打印第一条记录的属性
+        Object.keys(properties).forEach(key => {
+          const prop = properties[key];
+          let value = '无法读取';
+          
+          // 根据不同的属性类型获取值
+          if (prop.type === 'title' && prop.title[0]) {
+            value = prop.title[0].plain_text;
+          } else if (prop.type === 'rich_text' && prop.rich_text[0]) {
+            value = prop.rich_text[0].plain_text;
+          } else if (prop.type === 'date' && prop.date) {
+            value = prop.date.start;
+          } else if (prop.type === 'select' && prop.select) {
+            value = prop.select.name;
+          }
+          
+          console.log(`- ${key}: ${value}`);
+        });
+      }
+      
+    } catch (dbError) {
+      console.error('❌ 数据库查询失败:', dbError.message);
+      if (dbError.code) {
+        console.error('错误代码:', dbError.code);
+      }
+      console.error('\n请检查您的数据库ID是否正确，以及API密钥是否有权限访问该数据库');
+    }
+    
+  } catch (error) {
+    console.error('❌ Notion客户端初始化失败:', error.message);
+    console.error('\n请检查您的API密钥是否正确');
+  }
+}
+
+testNotionConnection();
+
 // 启动测试菜单
 showTestMenu(); 

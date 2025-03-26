@@ -1,174 +1,119 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, message, Modal, Calendar, Tabs, Space, Badge, Card, Tag, Input } from 'antd';
-import { PlusOutlined, SyncOutlined, EditOutlined, DeleteOutlined, CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import ScheduleForm from './ScheduleForm';
+import { Table, Button, Space, Modal, message, Calendar, Card, Tag } from 'antd';
+import { CalendarOutlined, UnorderedListOutlined, PlusOutlined, SyncOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import 'moment/locale/zh-cn';
-moment.locale('zh-cn');
+import ScheduleForm from './ScheduleForm';
+import { api, API_ENDPOINTS } from '../../utils/api';
+import '../../styles/schedule.css';
 
-const { TabPane } = Tabs;
-const { Search } = Input;
+moment.locale('zh-cn');
 
 const ScheduleList = () => {
   const [schedules, setSchedules] = useState([]);
-  const [leaders, setLeaders] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState('list'); // 'list' 或 'calendar'
+  const [viewMode, setViewMode] = useState('list');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-  const [searchText, setSearchText] = useState('');
-  const [syncingStatus, setSyncingStatus] = useState({
-    syncing: false,
-    lastSynced: null,
-    error: null,
-  });
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
 
-  useEffect(() => {
-    fetchSchedules();
-    fetchLeaders();
-  }, []);
-
+  // 获取排期数据
   const fetchSchedules = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/schedules');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const data = await api.get(API_ENDPOINTS.SCHEDULES);
+      if (data && data.schedule) {
+        setSchedules(data.schedule);
+      } else {
+        message.error('获取排期数据失败，返回格式不正确');
       }
-      const data = await response.json();
-      console.log('获取到的排期数据:', data);
-      setSchedules(data.schedule || []);
     } catch (error) {
       console.error('获取排期失败:', error);
-      message.error('获取排期列表失败，请重试');
+      message.error(`获取排期失败: ${error.message}`);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchLeaders = async () => {
+  // 同步Notion数据
+  const syncWithNotion = async () => {
+    setSyncLoading(true);
+    setSyncStatus(null);
     try {
-      const response = await fetch('http://localhost:3001/api/leaders');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      console.log('获取到的领读人数据:', data); // 调试信息
-      // 确保设置的是一个数组
-      setLeaders(Array.isArray(data) ? data : []);
+      const result = await api.post(API_ENDPOINTS.SYNC_SCHEDULES);
+      setSyncStatus({
+        success: true,
+        message: result.message,
+        details: `${result.totalCreated || 0}条新增，${result.totalUpdated || 0}条更新，${result.totalErrors || 0}条错误`
+      });
+      message.success('同步成功');
+      fetchSchedules();
     } catch (error) {
-      console.error('获取领读人失败:', error);
-      setLeaders([]); // 出错时设置为空数组
+      console.error('同步失败:', error);
+      setSyncStatus({
+        success: false,
+        message: `同步失败: ${error.message}`,
+      });
+      message.error(`同步失败: ${error.message}`);
+    } finally {
+      setSyncLoading(false);
     }
   };
 
-  const handleAddSchedule = () => {
-    setEditingSchedule(null);
-    setModalVisible(true);
+  // 删除排期
+  const handleDelete = async (date) => {
+    try {
+      await api.delete(API_ENDPOINTS.SCHEDULE(date));
+      message.success('删除成功');
+      fetchSchedules();
+    } catch (error) {
+      console.error('删除失败:', error);
+      message.error(`删除失败: ${error.message}`);
+    }
   };
 
-  const handleEditSchedule = (schedule) => {
+  // 打开编辑模态框
+  const openEditModal = (schedule) => {
     setEditingSchedule(schedule);
     setModalVisible(true);
   };
 
-  const handleDeleteSchedule = (date) => {
-    Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除这个排期吗？此操作不可恢复。',
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          const response = await fetch(`http://localhost:3001/api/schedules/${date}`, {
-            method: 'DELETE',
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
-          message.success('排期删除成功');
-          fetchSchedules();
-        } catch (error) {
-          console.error('删除排期失败:', error);
-          message.error('删除排期失败，请重试');
-        }
-      },
-    });
+  // 关闭模态框
+  const handleCancel = () => {
+    setModalVisible(false);
+    setEditingSchedule(null);
   };
 
+  // 提交表单
   const handleFormSubmit = async (values) => {
-    setConfirmLoading(true);
     try {
-      const url = editingSchedule 
-        ? `http://localhost:3001/api/schedules/${editingSchedule.date}`
-        : 'http://localhost:3001/api/schedules';
-      
-      const method = editingSchedule ? 'PUT' : 'POST';
-      
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(values),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      if (editingSchedule) {
+        // 更新
+        await api.put(API_ENDPOINTS.SCHEDULE(editingSchedule.date), values);
+        message.success('排期更新成功');
+      } else {
+        // 新增
+        await api.post(API_ENDPOINTS.SCHEDULES, values);
+        message.success('排期添加成功');
       }
-      
-      message.success(`${editingSchedule ? '更新' : '添加'}排期成功`);
       setModalVisible(false);
+      setEditingSchedule(null);
       fetchSchedules();
     } catch (error) {
-      console.error(`${editingSchedule ? '更新' : '添加'}排期失败:`, error);
-      message.error(error.message || `${editingSchedule ? '更新' : '添加'}排期失败，请重试`);
-    } finally {
-      setConfirmLoading(false);
+      console.error('提交失败:', error);
+      message.error(`提交失败: ${error.message}`);
     }
   };
 
-  const handleSyncToNotion = async () => {
-    setSyncingStatus({ ...syncingStatus, syncing: true, error: null });
-    try {
-      const response = await fetch('http://localhost:3001/api/schedules/sync', {
-        method: 'POST',
-      });
-      
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || `HTTP error! status: ${response.status}`);
-      }
-      
-      message.success('同步到Notion成功');
-      setSyncingStatus({ 
-        syncing: false, 
-        lastSynced: new Date().toLocaleString(), 
-        error: null 
-      });
-    } catch (error) {
-      console.error('同步到Notion失败:', error);
-      message.error('同步到Notion失败: ' + error.message);
-      setSyncingStatus({ 
-        ...syncingStatus, 
-        syncing: false, 
-        error: error.message 
-      });
-    }
-  };
-
+  // 表格列定义
   const columns = [
     {
       title: '日期',
       dataIndex: 'date',
       key: 'date',
-      sorter: (a, b) => new Date(a.date) - new Date(b.date),
       render: (text) => moment(text).format('YYYY-MM-DD'),
+      sorter: (a, b) => moment(a.date).valueOf() - moment(b.date).valueOf(),
     },
     {
       title: '书名',
@@ -179,10 +124,6 @@ const ScheduleList = () => {
       title: '领读人',
       dataIndex: 'leaderName',
       key: 'leaderName',
-      render: (text) => {
-        const leader = Array.isArray(leaders) ? leaders.find(l => l.name === text) : null;
-        return leader?.isHost ? <Tag color="blue">{text} (主持人)</Tag> : text;
-      },
     },
     {
       title: '主持人',
@@ -193,20 +134,20 @@ const ScheduleList = () => {
       title: '操作',
       key: 'action',
       render: (_, record) => (
-        <Space size="small">
-          <Button 
-            type="primary" 
-            icon={<EditOutlined />} 
-            size="small"
-            onClick={() => handleEditSchedule(record)}
-          >
+        <Space size="middle">
+          <Button type="link" onClick={() => openEditModal(record)}>
             编辑
           </Button>
-          <Button 
-            danger 
-            icon={<DeleteOutlined />} 
-            size="small"
-            onClick={() => handleDeleteSchedule(record.date)}
+          <Button
+            type="link"
+            danger
+            onClick={() => {
+              Modal.confirm({
+                title: '确认删除',
+                content: `确定要删除"${record.bookName}"的排期吗？`,
+                onOk: () => handleDelete(record.date),
+              });
+            }}
           >
             删除
           </Button>
@@ -215,109 +156,103 @@ const ScheduleList = () => {
     },
   ];
 
-  const filteredSchedules = schedules.filter(schedule => {
-    return (
-      schedule.bookName.toLowerCase().includes(searchText.toLowerCase()) ||
-      schedule.leaderName.toLowerCase().includes(searchText.toLowerCase()) ||
-      schedule.hostName.toLowerCase().includes(searchText.toLowerCase())
-    );
-  });
-
+  // 日历单元格渲染
   const dateCellRender = (value) => {
-    const dateStr = value.format('YYYY-MM-DD');
-    const schedulesForDate = schedules.filter(s => s.date === dateStr);
+    const date = value.format('YYYY-MM-DD');
+    const scheduleForDate = schedules.find(s => s.date === date);
+    
+    if (!scheduleForDate) return null;
     
     return (
-      <div className="calendar-cell">
-        {schedulesForDate.map((s, index) => (
-          <div key={index} className="calendar-event">
-            <div className="calendar-event-title">{s.bookName}</div>
-            <div className="calendar-event-leader">领读: {s.leaderName}</div>
-            <div className="calendar-event-host">主持: {s.hostName}</div>
-          </div>
-        ))}
+      <div className="calendar-schedule">
+        <div className="book-title">{scheduleForDate.bookName}</div>
+        <div>
+          <span>领读：{scheduleForDate.leaderName}</span>
+          <br />
+          <span>主持：{scheduleForDate.hostName}</span>
+        </div>
       </div>
     );
   };
 
+  // 组件挂载时获取数据
+  useEffect(() => {
+    fetchSchedules();
+  }, []);
+
   return (
     <div>
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between' }}>
-        <div>
+      <div style={{ marginBottom: 16 }}>
+        <Space style={{ marginBottom: 16 }}>
+          <Button 
+            type={viewMode === 'list' ? 'primary' : 'default'}
+            icon={<UnorderedListOutlined />}
+            onClick={() => setViewMode('list')}
+          >
+            列表视图
+          </Button>
+          <Button 
+            type={viewMode === 'calendar' ? 'primary' : 'default'}
+            icon={<CalendarOutlined />}
+            onClick={() => setViewMode('calendar')}
+          >
+            日历视图
+          </Button>
           <Button 
             type="primary" 
             icon={<PlusOutlined />} 
-            onClick={handleAddSchedule}
-            style={{ marginRight: 8 }}
+            onClick={() => setModalVisible(true)}
           >
             添加排期
           </Button>
-          <Button
-            icon={<SyncOutlined spin={syncingStatus.syncing} />}
-            onClick={handleSyncToNotion}
-            loading={syncingStatus.syncing}
+          <Button 
+            type="default" 
+            icon={<SyncOutlined spin={syncLoading} />} 
+            onClick={syncWithNotion}
+            loading={syncLoading}
           >
-            同步到Notion
+            同步Notion
           </Button>
-        </div>
-        <div>
-          <Button.Group>
-            <Button 
-              type={viewMode === 'list' ? 'primary' : 'default'}
-              icon={<UnorderedListOutlined />}
-              onClick={() => setViewMode('list')}
-            >
-              列表视图
-            </Button>
-            <Button 
-              type={viewMode === 'calendar' ? 'primary' : 'default'}
-              icon={<CalendarOutlined />}
-              onClick={() => setViewMode('calendar')}
-            >
-              日历视图
-            </Button>
-          </Button.Group>
-        </div>
-      </Space>
+        </Space>
+        
+        {syncStatus && (
+          <Card size="small" style={{ marginBottom: 16 }}>
+            <div>
+              <Tag color={syncStatus.success ? 'success' : 'error'}>
+                {syncStatus.success ? '同步成功' : '同步失败'}
+              </Tag>
+              <span>{syncStatus.message}</span>
+              {syncStatus.details && <div>{syncStatus.details}</div>}
+            </div>
+          </Card>
+        )}
+      </div>
 
-      {viewMode === 'list' && (
-        <>
-          <Search
-            placeholder="搜索书名、领读人或主持人"
-            style={{ marginBottom: 16 }}
-            onSearch={value => setSearchText(value)}
-            onChange={e => setSearchText(e.target.value)}
-            allowClear
-          />
-          <Table
-            columns={columns}
-            dataSource={filteredSchedules}
-            rowKey="date"
-            loading={loading}
-          />
-        </>
-      )}
-
-      {viewMode === 'calendar' && (
-        <Card>
-          <Calendar
-            dateCellRender={dateCellRender}
-          />
-        </Card>
+      {viewMode === 'list' ? (
+        <Table 
+          columns={columns} 
+          dataSource={schedules} 
+          rowKey="date" 
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+        />
+      ) : (
+        <div className="calendar-view">
+          <Calendar dateCellRender={dateCellRender} />
+        </div>
       )}
 
       <Modal
         title={editingSchedule ? '编辑排期' : '添加排期'}
-        visible={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        open={modalVisible}
+        onCancel={handleCancel}
         footer={null}
-        confirmLoading={confirmLoading}
+        destroyOnClose
       >
         <ScheduleForm
           initialValues={editingSchedule}
           onSubmit={handleFormSubmit}
-          onCancel={() => setModalVisible(false)}
-          confirmLoading={confirmLoading}
+          onCancel={handleCancel}
         />
       </Modal>
     </div>
