@@ -24,13 +24,13 @@ if (global.TEST_MODE) {
 }
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3001');
-console.log(`尝试在端口 ${PORT} 上启动服务器...`);
+const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT || '3001', 10);
+console.log(`尝试在端口 ${BACKEND_PORT} 上启动后端服务器...`);
 
 // 中间件
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://yourdomain.com' 
+    ? ['https://your-production-domain.com'] 
     : ['http://localhost:3000', 'http://127.0.0.1:3000'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -81,19 +81,54 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: '服务器内部错误' });
 });
 
-// 尝试启动服务器
-const server = app.listen(PORT, () => {
-  console.log(`服务器成功运行在 http://localhost:${PORT}`);
-  validateNotionConfig();
-}).on('error', (err) => {
-  if (err.code === 'EADDRINUSE') {
-    console.error(`端口 ${PORT} 已被占用，尝试使用端口 ${PORT + 1}`);
-    // 尝试其他端口
-    app.listen(PORT + 1, () => {
-      console.log(`服务器运行在 http://localhost:${PORT + 1}`);
+// 检查端口是否被占用的函数
+function checkPortInUse(port) {
+  return new Promise((resolve) => {
+    const net = require('net');
+    const server = net.createServer();
+    
+    server.once('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.log(`端口 ${port} 已被占用`);
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    });
+    
+    server.once('listening', () => {
+      server.close();
+      resolve(false);
+    });
+    
+    server.listen(port);
+  });
+}
+
+// 启动服务器的函数
+async function startServer(port) {
+  try {
+    const isPortInUse = await checkPortInUse(port);
+    
+    if (isPortInUse) {
+      // 尝试下一个端口
+      const nextPort = port + 1;
+      console.log(`尝试使用备用端口 ${nextPort}`);
+      return startServer(nextPort);
+    }
+    
+    // 启动服务器
+    app.listen(port, () => {
+      console.log(`后端服务器成功运行在 http://localhost:${port}`);
       validateNotionConfig();
     });
-  } else {
-    console.error('服务器启动失败:', err);
+    
+    return port;
+  } catch (error) {
+    console.error('启动服务器时出错:', error);
+    return null;
   }
-}); 
+}
+
+// 尝试启动服务器
+startServer(BACKEND_PORT); 

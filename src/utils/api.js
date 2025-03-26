@@ -5,8 +5,8 @@ const getBaseUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  // 默认端口
-  return 'http://localhost:3001';
+  // 使用相对路径，依赖setupProxy.js的代理功能
+  return '';
 };
 
 const API_BASE_URL = getBaseUrl();
@@ -27,10 +27,10 @@ export const API_ENDPOINTS = {
   SYNC_SCHEDULES: '/api/schedules/sync',
 };
 
-// 带有重试的通用请求函数
-export const fetchApi = async (url, options = {}, retries = 1) => {
+// 通用请求函数
+export const fetchApi = async (url, options = {}) => {
   try {
-    console.log(`请求: ${options.method || 'GET'} ${url}`);
+    console.log(`API请求: ${options.method || 'GET'} ${url}`);
     const startTime = Date.now();
     
     const response = await fetch(url, {
@@ -41,7 +41,7 @@ export const fetchApi = async (url, options = {}, retries = 1) => {
       ...options,
     });
 
-    console.log(`响应: ${response.status} (${Date.now() - startTime}ms)`);
+    console.log(`API响应: ${response.status} (${Date.now() - startTime}ms)`);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -51,16 +51,6 @@ export const fetchApi = async (url, options = {}, retries = 1) => {
     return await response.json();
   } catch (error) {
     console.error('API请求错误:', error);
-    
-    // 如果是跨域错误或网络错误，且还有重试次数，尝试不同的端口
-    if (retries > 0 && (error.message.includes('Network') || error.message.includes('CORS'))) {
-      console.log(`尝试其他端口重试... (剩余重试: ${retries})`);
-      
-      // 改变端口尝试
-      const newUrl = url.replace(':3001', ':3002');
-      return fetchApi(newUrl, options, retries - 1);
-    }
-    
     throw error;
   }
 };
