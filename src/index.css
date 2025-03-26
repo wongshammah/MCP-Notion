@@ -1,0 +1,65 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* 页面布局相关 */
+.layout {
+  min-height: 100vh;
+}
+
+.content-wrapper {
+  padding: 24px;
+}
+
+/* 表格和表单相关 */
+.search-form {
+  margin-bottom: 1rem;
+}
+
+.form-buttons {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* 排期日历相关 */
+.events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.events .ant-badge-status {
+  width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.notes-month {
+  font-size: 28px;
+  text-align: center;
+}
+
+.notes-month section {
+  font-size: 28px;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .ant-layout-content {
+    padding: 12px;
+  }
+} 
