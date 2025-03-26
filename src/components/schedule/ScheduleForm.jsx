@@ -16,19 +16,37 @@ const ScheduleForm = ({ initialValues, onSubmit, onCancel }) => {
     const fetchLeaders = async () => {
       setLoading(true);
       try {
-        const data = await api.get(API_ENDPOINTS.LEADERS);
+        const response = await api.get(API_ENDPOINTS.LEADERS);
         
-        // 确保数据是数组
-        if (Array.isArray(data)) {
+        console.log('获取到的领读人数据:', response);
+        
+        // 处理API可能返回的不同格式的数据结构
+        let leadersData = [];
+        
+        if (response && response.leaders) {
+          // 处理 {leaders: {name1: {}, name2: {}}} 格式
+          leadersData = Object.values(response.leaders);
+        } else if (Array.isArray(response)) {
+          // 处理数组格式 [{}, {}, {}]
+          leadersData = response;
+        } else if (typeof response === 'object' && !Array.isArray(response)) {
+          // 处理 {name1: {}, name2: {}} 格式
+          leadersData = Object.values(response);
+        }
+        
+        if (leadersData.length > 0) {
           // 分离领导者和主持人
-          const allLeaders = data.map(l => l.name);
-          const hostLeaders = data.filter(l => l.isHost).map(l => l.name);
+          const allLeaders = leadersData.map(l => l.name);
+          const hostLeaders = leadersData.filter(l => l.isHost).map(l => l.name);
+          
+          console.log('处理后的领读人:', allLeaders);
+          console.log('处理后的主持人:', hostLeaders);
           
           setLeaders(allLeaders);
           setHosts(hostLeaders);
         } else {
-          console.error('获取到的领导者数据格式不正确');
-          message.error('获取领导者数据失败，请刷新页面重试');
+          console.error('获取到的领导者数据为空或格式不正确', leadersData);
+          message.warning('没有获取到领读人数据，请检查网络连接');
         }
       } catch (error) {
         console.error('获取领导者失败:', error);
@@ -98,6 +116,10 @@ const ScheduleForm = ({ initialValues, onSubmit, onCancel }) => {
           showSearch
           loading={loading}
           allowClear
+          notFoundContent={loading ? '加载中...' : '没有数据'}
+          filterOption={(input, option) =>
+            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+          }
         >
           {leaders.map(name => (
             <Option key={name} value={name}>{name}</Option>
@@ -115,6 +137,10 @@ const ScheduleForm = ({ initialValues, onSubmit, onCancel }) => {
           showSearch
           loading={loading}
           allowClear
+          notFoundContent={loading ? '加载中...' : '没有数据'}
+          filterOption={(input, option) =>
+            option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+          }
         >
           {hosts.map(name => (
             <Option key={name} value={name}>{name}</Option>
